@@ -12,11 +12,13 @@
 # import modules
 import rospy
 import tf
+from sympy import *
+from mpmath import radians
 from kuka_arm.srv import *
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from geometry_msgs.msg import Pose
-from mpmath import *
-from sympy import *
+##from mpmath import *
+
 
 
 def handle_calculate_IK(req):
@@ -25,7 +27,6 @@ def handle_calculate_IK(req):
         print "No valid poses received"
         return -1
     else:
-
         ### Your FK code here
         # Create symbols
         q1, q2, q3, q4, q5, q6, q7 = symbols('q1:8')
@@ -33,16 +34,15 @@ def handle_calculate_IK(req):
         a0, a1, a2, a3, a4, a5, a6 = symbols('a0:7')
         alp0, alp1, alp2, alp3, alp4, alp5, alp6 = symbols('alp0:7')
 
-	
-	
 	# Create Modified DH parameters
         s = {alp0:     0, a0:       0, d1:   0.75, q1: q1,
              alp1: -pi/2, a1:    0.35, d2:      0, q2: q2-pi/2,
              alp2:     0, a2:    1.25, d3:      0, q3: q3,
-             alp3: -pi/2, a3: -0.0536, d4: 1.5014, q4: q4,
-             alp4:  pi/2, a4:       0, d5:      0, q5: q5,
-             alp5: -pi/2, a5:       0, d6:      0, q6: q6,
-	     alp6:     0, a6:       0, d7:  0.303, q7: 0}
+            }
+            ##Not needed## alp3: -pi/2, a3:  -0.054, d4:   1.50, q4: q4,
+            ##Not needed## alp4:  pi/2, a4:       0, d5:      0, q5: q5,
+            ##Not needed## alp5: -pi/2, a5:       0, d6:      0, q6: q6,
+	    ##Not needed## alp6:     0, a6:       0, d7:  0.303, q7: 0}
 
 	
 	# Define Modified DH Transformation matrix
@@ -58,14 +58,14 @@ def handle_calculate_IK(req):
         T0_1 = TF_Matrix(alp0, a0, d1, q1).subs(s)
         T1_2 = TF_Matrix(alp1, a1, d2, q2).subs(s)
         T2_3 = TF_Matrix(alp2, a2, d3, q3).subs(s)
-        T3_4 = TF_Matrix(alp3, a3, d4, q4).subs(s)
-        T4_5 = TF_Matrix(alp4, a4, d5, q5).subs(s)
-        T5_6 = TF_Matrix(alp5, a5, d6, q6).subs(s)
-        T6_G = TF_Matrix(alp6, a6, d7, q7).subs(s)
+        ##Not needed ##T3_4 = TF_Matrix(alp3, a3, d4, q4).subs(s)
+        ##Not needed ##T4_5 = TF_Matrix(alp4, a4, d5, q5).subs(s)
+        ##Not needed ##T5_6 = TF_Matrix(alp5, a5, d6, q6).subs(s)
+        ##Not needed ##T6_G = TF_Matrix(alp6, a6, d7, q7).subs(s)
 	
 	
 	# Extract rotation matrices from the transformation matrices
-        T0_G = simplify(T0_1 * T1_2 * T2_3 * T3_4 * T4_5 * T5_6 * T6_G)
+        ##T0_G = simplify(T0_1 * T1_2 * T2_3 * T3_4 * T4_5 * T5_6 * T6_G)
 	
 	
         ###
@@ -82,15 +82,12 @@ def handle_calculate_IK(req):
                         [sin(y),  cos(y),  0],
                         [     0,       0,  1]])
 
+
+        R0_3 = simplify(T0_1[0:3,0:3] * T1_2[0:3,0:3] * T2_3[0:3,0:3])
         ROT_G = simplify(ROT_z * ROT_y * ROT_x)
-
-        print "ROT_G: " ,ROT_G
-
-        ROT_error = ROT_z.subs(y, pi) * ROT_y.subs(p, -pi/2)
-
+        ROT_error = ROT_z.subs(y, radians(180)) * ROT_y.subs(p, radians(-90))
         ROT_G = simplify(ROT_G * ROT_error)
 
-        R0_3 = T0_1[0:3,0:3] * T1_2[0:3,0:3] * T2_3[0:3,0:3]
 
         # Initialize service response
         joint_trajectory_list = []
@@ -113,22 +110,18 @@ def handle_calculate_IK(req):
 	    # Compensate for rotation discrepancy between DH parameters and Gazebo
 
 	   
-            ROT_G = ROT_G.subs({'r': roll, 'p': pitch, 'y': yaw}) 
+            ROT_G_eval = ROT_G.subs({'r': roll, 'p': pitch, 'y': yaw}) 
 
 
-            #G = Matrix ([[px],
-            #             [py],
-            #             [pz]])
 
-            #WC = G - (0.303) * ROT_G[:,2]
-            wx = px - 0.303 * ROT_G[0,2]
-            wy = py - 0.303 * ROT_G[1,2]
-            wz = pz - 0.303 * ROT_G[2,2]
+            wx = px - 0.303 * ROT_G_eval[0,2]
+            wy = py - 0.303 * ROT_G_eval[1,2]
+            wz = pz - 0.303 * ROT_G_eval[2,2]
 	    #
 	    #
 	    # Calculate joint angles using Geometric IK method
             theta1 = atan2(wy, wx)
-            side_a = 1.5014
+            side_a = 1.50
             r = sqrt(wx*wx+wy*wy) - 0.35 # a1: 0.35
             side_b = sqrt((r*r) + pow(wz - 0.75, 2))
             side_c = 1.25
@@ -141,13 +134,14 @@ def handle_calculate_IK(req):
             theta2 = pi/2 - angle_a - atan2(wz - 0.75, r)
             theta3 = pi/2 - (angle_b + 0.036) # 0.036 is for sag in link4
 
-            R0_3 = R0_3.evalf(subs={'q1':theta1, 'q2':theta2, 'q3':theta3})
+            R0_3_eval = R0_3.evalf(subs={'q1':theta1, 'q2':theta2, 'q3':theta3})
 
-            R3_6 = R0_3.transpose() * ROT_G
+            R3_6 = R0_3_eval.inv("LU") * ROT_G_eval
             
             theta4 = atan2(R3_6[2,2], -R3_6[0,2])
             theta5 = atan2(sqrt(R3_6[0,2]*R3_6[0,2] + R3_6[2,2]*R3_6[2,2]), R3_6[1,2])
             theta6 = atan2(-R3_6[1,1], R3_6[1,0])
+
             ###
 
             # Populate response for the IK request
