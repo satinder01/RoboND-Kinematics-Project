@@ -83,10 +83,10 @@ def handle_calculate_IK(req):
                         [     0,       0,  1]])
 
 
-        R0_3 = simplify(T0_1[0:3,0:3] * T1_2[0:3,0:3] * T2_3[0:3,0:3])
-        ROT_G = simplify(ROT_z * ROT_y * ROT_x)
+        R0_3 = (T0_1[0:3,0:3] * T1_2[0:3,0:3] * T2_3[0:3,0:3])
+        ROT_G = (ROT_z * ROT_y * ROT_x)
         ROT_error = ROT_z.subs(y, radians(180)) * ROT_y.subs(p, radians(-90))
-        ROT_G = simplify(ROT_G * ROT_error)
+        ROT_G = (ROT_G * ROT_error)
 
 
         # Initialize service response
@@ -136,11 +136,16 @@ def handle_calculate_IK(req):
 
             R0_3_eval = R0_3.evalf(subs={'q1':theta1, 'q2':theta2, 'q3':theta3})
 
-            R3_6 = R0_3_eval.inv("LU") * ROT_G_eval
+            R3_6 = R0_3_eval.transpose() * ROT_G_eval
             
-            theta4 = atan2(R3_6[2,2], -R3_6[0,2])
             theta5 = atan2(sqrt(R3_6[0,2]*R3_6[0,2] + R3_6[2,2]*R3_6[2,2]), R3_6[1,2])
-            theta6 = atan2(-R3_6[1,1], R3_6[1,0])
+
+            if (theta5 > pi):
+                theta4 = atan2(-R3_6[2,2], R3_6[0,2])
+                theta6 = atan2(R3_6[1,1], -R3_6[1,0])
+            else:
+                theta4 = atan2(R3_6[2,2], -R3_6[0,2])
+                theta6 = atan2(-R3_6[1,1], R3_6[1,0])
 
             ###
 
